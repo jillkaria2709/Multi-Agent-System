@@ -1,8 +1,8 @@
 streamlit
 openai
 pysqlite3-binary
-protobuf==3.20
-crewai==0.28.8
-crewai_tools==0.1.6
+protobuf>=3.20  
+crewai>=0.28.8  
+crewai_tools>=0.1.6  
 pandas
 langchain_openai
