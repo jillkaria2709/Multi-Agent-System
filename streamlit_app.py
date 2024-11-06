@@ -1,53 +1,150 @@
 import streamlit as st
-from openai import OpenAI
+import pandas as pd
+from crewai_tools import ScrapeWebsiteTool, FileWriterTool, TXTSearchTool
+from crewai import Agent, Task, Crew, Process
+from textwrap import dedent
+import os
+from langchain_openai import ChatOpenAI
+from io import StringIO
 
-# Show title and description.
-st.title("📄 Document question answering")
-st.write(
-    "Upload a document below and ask a question about it – GPT will answer! "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
+# Set API key for OpenAI (replace with your key as needed)
+os.environ['OPENAI_API_KEY'] = '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'
+
+# Initialize ChatOpenAI
+llm = ChatOpenAI(
+    model="gpt-3.5-turbo-16k",
+    temperature=0.1,
+    max_tokens=8000
 )
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
-else:
+# Define Agents
+student_profiler = Agent(
+    role='student_profiler',
+    goal='From limited data, you logically deduct conclusions about students.',
+    backstory='You are an expert psychologist with decades of experience.',
+    llm=llm, allow_delegation=False, verbose=True
+)
 
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
+course_specialist = Agent(
+    role='course specialist',
+    goal='Match the suitable course to the students',
+    backstory='You have exceptional knowledge of courses.',
+    llm=llm, allow_delegation=False, verbose=True
+)
 
-    # Let the user upload a file via `st.file_uploader`.
-    uploaded_file = st.file_uploader(
-        "Upload a document (.txt or .md)", type=("txt", "md")
+Chief_Recommendation_Director = Agent(
+    role="Chief Recommendation Director",
+    goal=dedent("Oversee and align work with campaign goals"),
+    backstory="Chief Promotion Officer of a large EdTech company.",
+    llm=llm, allow_delegation=False, verbose=True
+)
+
+campaign_agent = Agent(
+    role="campaign_agent",
+    goal="Develop compelling and innovative ad content",
+    backstory="Creative Content Creator at a top-tier digital marketing agency",
+    llm=llm, allow_delegation=False, verbose=True
+)
+
+# Define Tasks
+def get_ad_campaign_task(agent, customer_description, courses):
+    return Task(
+        description=dedent(f"""
+            You're creating a targeted marketing campaign based on the student's profile.
+            This is all we know from the student customer: {customer_description}.
+            These are the courses available: {courses}.
+            Your task: select exactly 3 courses best suited for this customer.
+        """),
+        agent=agent, expected_output='A finalized marketing campaign'
     )
 
-    # Ask the user for a question via `st.text_area`.
-    question = st.text_area(
-        "Now ask a question about the document!",
-        placeholder="Can you give me a short summary?",
-        disabled=not uploaded_file,
+def get_ad_campaign_written_task(agent, selection):
+    return Task(
+        description=dedent(f"""
+            Write a promotional message based on selected courses: {selection}.
+            Structure it in 3 paragraphs.
+        """),
+        agent=agent, expected_output='A promotional message'
     )
 
-    if uploaded_file and question:
+# Initialize session state for df_output
+if 'df_output' not in st.session_state:
+    st.session_state.df_output = pd.DataFrame()
 
-        # Process the uploaded file and question.
-        document = uploaded_file.read().decode()
-        messages = [
-            {
-                "role": "user",
-                "content": f"Here's a document: {document} \n\n---\n\n {question}",
-            }
-        ]
+# UI for Streamlit
+st.title("Personalized Course Recommendation Campaign")
 
-        # Generate an answer using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=messages,
-            stream=True,
+st.header("Student Profiles and Courses")
+
+# Input area for student profile data
+csv_input = st.text_area("Enter Student Data (CSV format)", value='''Academic Goals, Major, Hobbies, Computer Skills, Interest in Languages, GPA
+To become a software engineer, Computer Science, Gaming, Advanced, Spanish, 3.7
+To study environmental science, Environmental Science, Hiking, Intermediate, French, 3.5
+''')
+
+courses_input = st.text_area("Available Courses List", value='''"Introduction to Computer Science" - Harvard University on edX
+"Biology: Life on Earth" - Coursera
+"Introduction to Psychology" - Yale University on Coursera
+"Environmental Science" - University of Leeds on FutureLearn
+''')
+
+# Parse CSV input to DataFrame
+if st.button("Generate Recommendations"):
+    csvStringIO = StringIO(csv_input)
+    df_customers = pd.read_csv(csvStringIO, sep=",")
+
+    # Store results
+    df_output_list = []
+
+    # Process each student
+    for index, row in df_customers.iterrows():
+        customer_description = f"""
+        Academic goals: {row['Academic Goals']}
+        Major: {row[' Major']}
+        Hobbies: {row[' Hobbies']}
+        Computer skills: {row[' Computer Skills']}
+        Language interest: {row[' Interest in Languages']}
+        GPA: {row[' GPA']}
+        """
+
+        # Generate targeted courses
+        task1 = get_ad_campaign_task(Chief_Recommendation_Director, customer_description, courses_input)
+        
+        # Crew processing
+        targeting_crew = Crew(
+            agents=[student_profiler, course_specialist, Chief_Recommendation_Director],
+            tasks=[task1],
+            process=Process.sequential
         )
+        targeting_result = targeting_crew.kickoff()
 
-        # Stream the response to the app using `st.write_stream`.
-        st.write_stream(stream)
+        # Generate Campaign Message
+        task2 = get_ad_campaign_written_task(Chief_Recommendation_Director, targeting_result)
+        copywriting_crew = Crew(
+            agents=[campaign_agent, Chief_Recommendation_Director],
+            tasks=[task2],
+            process=Process.sequential
+        )
+        copywriting_result = copywriting_crew.kickoff()
+
+        # Append result to output
+        df_output_list.append({
+            'Customer': customer_description,
+            'Targeted Courses': str(targeting_result),  # Convert to string to avoid ArrowInvalid error
+            'Promo Message': str(copywriting_result)  # Convert to string to avoid ArrowInvalid error
+        })
+
+    # Convert list to DataFrame and store in session state
+    st.session_state.df_output = pd.DataFrame(df_output_list)
+
+    # Display output DataFrame in Streamlit
+    st.write("Generated Campaigns:")
+    st.write(st.session_state.df_output)
+
+# Option to download the result as CSV if df_output has content
+if not st.session_state.df_output.empty:
+    if st.button("Download Results as CSV"):
+        csv = st.session_state.df_output.to_csv(index=False).encode('utf-8')
+        st.download_button(label="Download CSV", data=csv, file_name="campaign_recommendations.csv", mime='text/csv')
+else:
+    st.write("No data to download. Please generate recommendations first.")
