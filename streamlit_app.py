@@ -126,16 +126,8 @@ if api_key:
             )
             targeting_result = targeting_crew.kickoff()
 
-            # Extract and format targeted courses
-            targeted_courses = ""
-            if hasattr(targeting_result, 'output'):
-                targeted_courses_list = [course.strip() for course in targeting_result.output.split('\n') if course.strip()]
-                targeted_courses = ', '.join(targeted_courses_list)
-            else:
-                targeted_courses = str(targeting_result).strip()
-
             # Generate Campaign Message
-            task2 = get_ad_campaign_written_task(Chief_Recommendation_Director, targeted_courses)
+            task2 = get_ad_campaign_written_task(Chief_Recommendation_Director, str(targeting_result).strip())
             copywriting_crew = Crew(
                 agents=[campaign_agent, Chief_Recommendation_Director],
                 tasks=[task2],
@@ -146,7 +138,6 @@ if api_key:
             # Append result to output
             df_output_list.append({
                 'Customer': customer_description.strip(),
-                'Targeted Courses': targeted_courses,
                 'Promo Message': str(copywriting_result.output).strip() if hasattr(copywriting_result, 'output') else str(copywriting_result).strip()
             })
 
