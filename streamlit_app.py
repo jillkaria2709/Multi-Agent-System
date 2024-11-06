@@ -47,6 +47,13 @@ if api_key:
         llm=llm, allow_delegation=False, verbose=True
     )
 
+    campaign_agent = Agent(
+        role="campaign_agent",
+        goal="Develop compelling and innovative ad content",
+        backstory="Creative Content Creator at a top-tier digital marketing agency",
+        llm=llm, allow_delegation=False, verbose=True
+    )
+
     # Define Tasks
     def get_ad_campaign_task(agent, customer_description, courses):
         return Task(
@@ -57,6 +64,15 @@ if api_key:
                 Your task: select exactly 3 courses best suited for this customer.
             """),
             agent=agent, expected_output='A finalized marketing campaign'
+        )
+
+    def get_ad_campaign_written_task(agent, selection):
+        return Task(
+            description=dedent(f"""
+                Write a promotional message based on selected courses: {selection}.
+                Structure it in 3 paragraphs.
+            """),
+            agent=agent, expected_output='A promotional message'
         )
 
     # UI for Streamlit
@@ -102,7 +118,7 @@ if api_key:
             # Generate targeted courses
             task1 = get_ad_campaign_task(Chief_Recommendation_Director, customer_description, courses_input)
             
-            # Crew processing
+            # Crew processing for targeted courses
             targeting_crew = Crew(
                 agents=[student_profiler, course_specialist, Chief_Recommendation_Director],
                 tasks=[task1],
@@ -110,14 +126,27 @@ if api_key:
             )
             targeting_result = targeting_crew.kickoff()
 
-            # Extract only the course names from the result
-            # Extract the relevant output as a string from the CrewOutput object
-            targeted_courses = str(targeting_result.output).strip() if hasattr(targeting_result, 'output') else str(targeting_result).strip()
- 
+            # Extract and format targeted courses
+            if hasattr(targeting_result, 'output'):
+                targeted_courses_list = [course.strip() for course in targeting_result.output.split('\n') if course.strip()]
+                targeted_courses = ', '.join(targeted_courses_list)
+            else:
+                targeted_courses = str(targeting_result).strip()
+
+            # Generate Campaign Message
+            task2 = get_ad_campaign_written_task(Chief_Recommendation_Director, targeted_courses)
+            copywriting_crew = Crew(
+                agents=[campaign_agent, Chief_Recommendation_Director],
+                tasks=[task2],
+                process=Process.sequential
+            )
+            copywriting_result = copywriting_crew.kickoff()
+
             # Append result to output
             df_output_list.append({
-                'Customer': customer_description,
-                'Targeted Courses': targeted_courses  # Only course names
+                'Customer': customer_description.strip(),
+                'Targeted Courses': targeted_courses,
+                'Promo Message': str(copywriting_result).strip()  # Full promotional message
             })
 
         # Convert list to DataFrame and store in session state
