@@ -1,5 +1,6 @@
 streamlit
 openai
+crewai-tools
 crewai
 pandas
 langchain_openai
