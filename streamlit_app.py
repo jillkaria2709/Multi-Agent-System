@@ -1,5 +1,8 @@
 import streamlit as st
 import pandas as pd
+__import__('pysqlite3')
+import sys
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 #from crewai_tools import ScrapeWebsiteTool, FileWriterTool, TXTSearchTool
 from crewai import Agent, Task, Crew, Process
 from textwrap import dedent
