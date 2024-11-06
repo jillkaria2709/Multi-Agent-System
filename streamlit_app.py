@@ -111,8 +111,9 @@ if api_key:
             targeting_result = targeting_crew.kickoff()
 
             # Extract only the course names from the result
-            targeted_courses = targeting_result.strip()  # Ensure it's clean and without surrounding characters
-
+            # Extract the relevant output as a string from the CrewOutput object
+            targeted_courses = str(targeting_result.output).strip() if hasattr(targeting_result, 'output') else str(targeting_result).strip()
+ 
             # Append result to output
             df_output_list.append({
                 'Customer': customer_description,
