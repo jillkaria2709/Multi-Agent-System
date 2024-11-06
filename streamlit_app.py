@@ -3,7 +3,6 @@ import pandas as pd
 __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-#from crewai_tools import ScrapeWebsiteTool, FileWriterTool, TXTSearchTool
 from crewai import Agent, Task, Crew, Process
 from textwrap import dedent
 import os
@@ -48,13 +47,6 @@ if api_key:
         llm=llm, allow_delegation=False, verbose=True
     )
 
-    campaign_agent = Agent(
-        role="campaign_agent",
-        goal="Develop compelling and innovative ad content",
-        backstory="Creative Content Creator at a top-tier digital marketing agency",
-        llm=llm, allow_delegation=False, verbose=True
-    )
-
     # Define Tasks
     def get_ad_campaign_task(agent, customer_description, courses):
         return Task(
@@ -65,15 +57,6 @@ if api_key:
                 Your task: select exactly 3 courses best suited for this customer.
             """),
             agent=agent, expected_output='A finalized marketing campaign'
-        )
-
-    def get_ad_campaign_written_task(agent, selection):
-        return Task(
-            description=dedent(f"""
-                Write a promotional message based on selected courses: {selection}.
-                Structure it in 3 paragraphs.
-            """),
-            agent=agent, expected_output='A promotional message'
         )
 
     # UI for Streamlit
@@ -127,20 +110,13 @@ if api_key:
             )
             targeting_result = targeting_crew.kickoff()
 
-            # Generate Campaign Message
-            task2 = get_ad_campaign_written_task(Chief_Recommendation_Director, targeting_result)
-            copywriting_crew = Crew(
-                agents=[campaign_agent, Chief_Recommendation_Director],
-                tasks=[task2],
-                process=Process.sequential
-            )
-            copywriting_result = copywriting_crew.kickoff()
+            # Extract only the course names from the result
+            targeted_courses = targeting_result.strip()  # Ensure it's clean and without surrounding characters
 
             # Append result to output
             df_output_list.append({
                 'Customer': customer_description,
-                'Targeted Courses': str(targeting_result),  # Convert to string to avoid ArrowInvalid error
-                'Promo Message': str(copywriting_result)  # Convert to string to avoid ArrowInvalid error
+                'Targeted Courses': targeted_courses  # Only course names
             })
 
         # Convert list to DataFrame and store in session state
