@@ -1,7 +1,6 @@
 streamlit
 openai
 crewai
-crewai-tools
 pandas
 langchain_openai
 pyarrow==10.0.1
